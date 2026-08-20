@@ -34,7 +34,7 @@ function SettingsPage() {
   const session = useSession();
   const { data: settings, isLoading } = useSettings();
   const save = useSaveSettings({ name: session.name, role: session.role });
-  const editable = session.can("settings.manage");
+  const editable = session.can("settings.write");
 
   const [form, setForm] = useState({
     grace_period_days: 14,
