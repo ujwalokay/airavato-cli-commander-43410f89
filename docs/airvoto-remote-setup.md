@@ -47,12 +47,12 @@ The POS computer must remain online while remote synchronization is needed. The 
 
 The implementation cannot complete a live POS sync until the following Airvoto-specific details are available:
 
-| Required item | Example |
-|---|---|
-| Local POS base URL | `http://127.0.0.1:8080` |
-| Authentication | Bearer token, API key, Windows service credential, or none |
-| API paths | `/api/products`, `/api/inventory`, `/api/orders` |
-| Request/response format | JSON, XML, WebSocket messages, or database schema |
-| VPN or relay endpoint | Private hostname or protected relay URL |
+| Required item           | Example                                                    |
+| ----------------------- | ---------------------------------------------------------- |
+| Local POS base URL      | `http://127.0.0.1:8080`                                    |
+| Authentication          | Bearer token, API key, Windows service credential, or none |
+| API paths               | `/api/products`, `/api/inventory`, `/api/orders`           |
+| Request/response format | JSON, XML, WebSocket messages, or database schema          |
+| VPN or relay endpoint   | Private hostname or protected relay URL                    |
 
 Without these values, the bridge is intentionally fail-closed and cannot access arbitrary local services.

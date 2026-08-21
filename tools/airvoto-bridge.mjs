@@ -89,7 +89,10 @@ const server = http.createServer(async (request, response) => {
     }
 
     const incoming = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-    const path = incoming.pathname === "/health" ? "/health" : incoming.pathname.replace(/^\/proxy/, "") || "/";
+    const path =
+      incoming.pathname === "/health"
+        ? "/health"
+        : incoming.pathname.replace(/^\/proxy/, "") || "/";
 
     if (!allowedPaths.has(path)) {
       writeJson(response, 403, { error: "Path is not allowlisted" });
@@ -127,7 +130,8 @@ const server = http.createServer(async (request, response) => {
     });
     response.end(responseBody);
   } catch (error) {
-    const message = error?.name === "AbortError" ? "POS request timed out" : "POS bridge request failed";
+    const message =
+      error?.name === "AbortError" ? "POS request timed out" : "POS bridge request failed";
     writeJson(response, 502, { error: message });
   }
 });

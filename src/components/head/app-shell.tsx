@@ -35,7 +35,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/head/status-badge";
 import { useSession } from "@/components/head/session";
-import { ROLES, relTime } from "@/lib/head-data";
+import { relTime } from "@/lib/head-data";
 import { useIncidents } from "@/lib/head-db";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -116,7 +116,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur sm:px-5">
           <Sheet open={drawer} onOpenChange={setDrawer}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open navigation">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                aria-label="Open navigation"
+              >
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
@@ -224,21 +229,26 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Active role (demo switcher)</DropdownMenuLabel>
-                {ROLES.map((r) => (
-                  <DropdownMenuItem
-                    key={r.id}
-                    onSelect={() => session.setRole(r.id)}
-                    className="flex-col items-start gap-0.5"
-                  >
-                    <span className={cn("text-sm", session.role === r.id && "font-semibold text-primary")}>
-                      {r.label}
-                    </span>
-                    <span className="text-xs text-muted-foreground">{r.blurb}</span>
+                <DropdownMenuLabel>
+                  {session.authenticated ? "Authenticated account" : "Authentication required"}
+                </DropdownMenuLabel>
+                {session.email ? (
+                  <DropdownMenuItem disabled className="flex-col items-start gap-0.5 opacity-100">
+                    <span className="text-sm font-medium">{session.name}</span>
+                    <span className="text-xs text-muted-foreground">{session.email}</span>
                   </DropdownMenuItem>
-                ))}
+                ) : (
+                  <DropdownMenuItem disabled className="text-xs text-muted-foreground opacity-100">
+                    Sign in to manage platform data
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => toast.success("Session ended securely.")}>
+                <DropdownMenuItem
+                  disabled={!session.authenticated}
+                  onSelect={() => {
+                    void session.signOut().then(() => toast.success("Signed out securely."));
+                  }}
+                >
                   <LogOut className="size-4" /> Secure logout
                 </DropdownMenuItem>
               </DropdownMenuContent>
