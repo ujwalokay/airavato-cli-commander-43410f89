@@ -232,6 +232,8 @@ export type Database = {
           created_at: string
           db_readable: boolean
           db_writable: boolean
+          device_token: string | null
+          device_token_issued_at: string | null
           disk_free_gb: number
           id: string
           last_backup: string | null
@@ -259,6 +261,8 @@ export type Database = {
           created_at?: string
           db_readable?: boolean
           db_writable?: boolean
+          device_token?: string | null
+          device_token_issued_at?: string | null
           disk_free_gb?: number
           id: string
           last_backup?: string | null
@@ -286,6 +290,8 @@ export type Database = {
           created_at?: string
           db_readable?: boolean
           db_writable?: boolean
+          device_token?: string | null
+          device_token_issued_at?: string | null
           disk_free_gb?: number
           id?: string
           last_backup?: string | null
