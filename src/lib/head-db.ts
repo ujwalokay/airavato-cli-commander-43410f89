@@ -38,19 +38,31 @@ export type Platform = {
   licenses: License[];
 };
 
-async function fetchPlatform(): Promise<Platform> {
-  const [cafeRes, instRes, licRes] = await Promise.all([
-    supabase.from("cafes").select("*").order("created_at", { ascending: false }),
-    supabase.from("installations").select("*"),
-    supabase.from("licenses").select("*"),
-  ]);
-  if (cafeRes.error) throw cafeRes.error;
-  if (instRes.error) throw instRes.error;
-  if (licRes.error) throw licRes.error;
+type RenderSnapshot = {
+  cafes: Record<string, unknown>[];
+  installations: Record<string, unknown>[];
+  licenses: Record<string, unknown>[];
+  sync_events: Record<string, unknown>[];
+  support_incidents: Record<string, unknown>[];
+  software_releases: Record<string, unknown>[];
+  audit_logs: Record<string, unknown>[];
+  heartbeats: Record<string, unknown>[];
+  platform_settings: Record<string, unknown> | null;
+};
 
-  const cafeRows = cafeRes.data ?? [];
-  const instRows = instRes.data ?? [];
-  const licRows = licRes.data ?? [];
+async function fetchRenderSnapshot(): Promise<RenderSnapshot> {
+  const response = await fetch("/api/platform/snapshot", {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(`Render database request failed (${response.status})`);
+  return (await response.json()) as RenderSnapshot;
+}
+
+async function fetchPlatform(): Promise<Platform> {
+  const snapshot = await fetchRenderSnapshot();
+  const cafeRows = snapshot.cafes;
+  const instRows = snapshot.installations;
+  const licRows = snapshot.licenses;
 
   const nameById = new Map(cafeRows.map((c) => [c.id as string, c.name as string]));
   const licenseByCafe = new Map(licRows.map((l) => [l.cafe_id as string, l]));
@@ -90,7 +102,8 @@ async function fetchPlatform(): Promise<Platform> {
   const cafes: Cafe[] = cafeRows.map((c) => {
     const mine = installations.filter((i) => i.cafeId === c.id);
     const lastHeartbeat = mine.reduce<number | null>(
-      (acc, i) => (i.lastHeartbeat != null && (acc == null || i.lastHeartbeat > acc) ? i.lastHeartbeat : acc),
+      (acc, i) =>
+        i.lastHeartbeat != null && (acc == null || i.lastHeartbeat > acc) ? i.lastHeartbeat : acc,
       null,
     );
     const license = (licenseByCafe.get(c.id as string)?.state ?? c.license_state) as LicenseState;
@@ -194,13 +207,8 @@ export function useSyncEvents() {
   const q = useQuery({
     queryKey: ["sync_events"],
     queryFn: async (): Promise<Omit<SyncEvent, "cafeName">[]> => {
-      const { data, error } = await supabase
-        .from("sync_events")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      return (data ?? []).map((e) => ({
+      const snapshot = await fetchRenderSnapshot();
+      return snapshot.sync_events.map((e) => ({
         id: e.id as string,
         cafeId: e.cafe_id as string,
         installationId: (e.installation_id as string | null) ?? null,
@@ -227,13 +235,8 @@ export function useIncidents() {
   const q = useQuery({
     queryKey: ["support_incidents"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("support_incidents")
-        .select("*")
-        .order("opened_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return data ?? [];
+      const snapshot = await fetchRenderSnapshot();
+      return snapshot.support_incidents;
     },
   });
   const names = new Map(platform.data.cafes.map((c) => [c.id, c.name]));
@@ -255,12 +258,8 @@ export function useReleases() {
   const q = useQuery({
     queryKey: ["releases"],
     queryFn: async (): Promise<Release[]> => {
-      const { data, error } = await supabase
-        .from("software_releases")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []).map((r) => ({
+      const snapshot = await fetchRenderSnapshot();
+      return snapshot.software_releases.map((r) => ({
         id: r.id as string,
         version: r.version as string,
         channel: r.channel as Release["channel"],
@@ -281,13 +280,8 @@ export function useAuditLogs() {
   const q = useQuery({
     queryKey: ["audit_logs"],
     queryFn: async (): Promise<AuditRecord[]> => {
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select("*")
-        .order("at", { ascending: false })
-        .limit(1000);
-      if (error) throw error;
-      return (data ?? []).map((a) => ({
+      const snapshot = await fetchRenderSnapshot();
+      return snapshot.audit_logs.map((a) => ({
         id: a.id as string,
         at: Date.parse(a.at as string),
         actor: a.actor as string,
@@ -312,19 +306,15 @@ export function useHeartbeats(installationId: string) {
   const q = useQuery({
     queryKey: ["heartbeats", installationId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("heartbeats")
-        .select("*")
-        .eq("installation_id", installationId)
-        .gte("at", new Date(Date.now() - DAY).toISOString())
-        .order("at", { ascending: true });
-      if (error) throw error;
-      return (data ?? []).map((h) => ({
-        at: Date.parse(h.at as string),
-        healthy: h.healthy as boolean,
-        syncQueue: h.sync_queue as number,
-        appVersion: (h.app_version as string | null) ?? "—",
-      }));
+      const snapshot = await fetchRenderSnapshot();
+      return snapshot.heartbeats
+        .filter((h) => h.installation_id === installationId)
+        .map((h) => ({
+          at: Date.parse(h.at as string),
+          healthy: h.healthy as boolean,
+          syncQueue: h.sync_queue as number,
+          appVersion: (h.app_version as string | null) ?? "—",
+        }));
     },
   });
   return { ...q, data: q.data ?? [] };
@@ -334,12 +324,9 @@ export function useSettings() {
   const q = useQuery({
     queryKey: ["platform_settings"],
     queryFn: async (): Promise<PlatformSettings> => {
-      const { data, error } = await supabase
-        .from("platform_settings")
-        .select("*")
-        .eq("id", 1)
-        .single();
-      if (error) throw error;
+      const snapshot = await fetchRenderSnapshot();
+      const data = snapshot.platform_settings;
+      if (!data) throw new Error("Platform settings are not initialized");
       return {
         gracePeriodDays: data.grace_period_days,
         heartbeatIntervalMin: data.heartbeat_interval_min,
@@ -365,12 +352,8 @@ export function useHealthTimeline() {
     queryKey: ["health_timeline"],
     queryFn: async () => {
       const since = new Date(Date.now() - DAY).toISOString();
-      const { data, error } = await supabase
-        .from("heartbeats")
-        .select("at, healthy, installation_id")
-        .gte("at", since);
-      if (error) throw error;
-      return data ?? [];
+      const snapshot = await fetchRenderSnapshot();
+      return snapshot.heartbeats;
     },
   });
   const buckets = Array.from({ length: 24 }, (_, idx) => {
@@ -622,8 +605,14 @@ export function useLicenseAction(actor: Actor) {
         .update({ state: "Suspended", suspension_reason: input.reason })
         .eq("id", input.licenseId);
       if (error) throw error;
-      await supabase.from("cafes").update({ license_state: "Suspended", public_state: "Disabled" }).eq("id", input.cafe.id);
-      await supabase.from("installations").update({ token_state: "Revoked" }).eq("cafe_id", input.cafe.id);
+      await supabase
+        .from("cafes")
+        .update({ license_state: "Suspended", public_state: "Disabled" })
+        .eq("id", input.cafe.id);
+      await supabase
+        .from("installations")
+        .update({ token_state: "Revoked" })
+        .eq("cafe_id", input.cafe.id);
     } else if (kind === "reactivate") {
       const { error } = await supabase
         .from("licenses")
@@ -635,8 +624,14 @@ export function useLicenseAction(actor: Actor) {
         })
         .eq("id", input.licenseId);
       if (error) throw error;
-      await supabase.from("cafes").update({ license_state: "Active", public_state: "Live" }).eq("id", input.cafe.id);
-      await supabase.from("installations").update({ token_state: "Valid" }).eq("cafe_id", input.cafe.id);
+      await supabase
+        .from("cafes")
+        .update({ license_state: "Active", public_state: "Live" })
+        .eq("id", input.cafe.id);
+      await supabase
+        .from("installations")
+        .update({ token_state: "Valid" })
+        .eq("cafe_id", input.cafe.id);
     } else {
       const { error } = await supabase
         .from("licenses")
@@ -646,7 +641,10 @@ export function useLicenseAction(actor: Actor) {
         })
         .eq("id", input.licenseId);
       if (error) throw error;
-      await supabase.from("installations").update({ token_state: "Rotating" }).eq("cafe_id", input.cafe.id);
+      await supabase
+        .from("installations")
+        .update({ token_state: "Rotating" })
+        .eq("cafe_id", input.cafe.id);
     }
 
     await writeAudit({
@@ -719,7 +717,10 @@ export function useUpdateCafe(actor: Actor) {
       after: string;
       reason?: string;
     }) => {
-      const { error } = await supabase.from("cafes").update(input.patch as never).eq("id", input.cafe.id);
+      const { error } = await supabase
+        .from("cafes")
+        .update(input.patch as never)
+        .eq("id", input.cafe.id);
       if (error) throw error;
       await writeAudit({
         actor: actor.name,
@@ -740,7 +741,11 @@ export function useUpdateCafe(actor: Actor) {
 export function useRegisterInstallation(actor: Actor) {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (input: { cafe: { id: string; name: string; slug: string }; machineName: string; ring: Ring }) => {
+    mutationFn: async (input: {
+      cafe: { id: string; name: string; slug: string };
+      machineName: string;
+      ring: Ring;
+    }) => {
       const code = randomCode();
       const id = `INST-${input.cafe.slug.slice(0, 6).toUpperCase()}-${code.slice(0, 4)}`;
       const { error } = await supabase.from("installations").insert({
@@ -772,10 +777,7 @@ export function useRegisterInstallation(actor: Actor) {
 export function useRevokeInstallation(actor: Actor) {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (input: {
-      installation: Installation;
-      reason: string;
-    }) => {
+    mutationFn: async (input: { installation: Installation; reason: string }) => {
       const { error } = await supabase
         .from("installations")
         .update({ token_state: "Revoked", revoked_at: new Date().toISOString() })
@@ -807,7 +809,11 @@ export function useSyncAction(actor: Actor) {
       reason: string;
     }) => {
       const state =
-        input.kind === "retry" ? "Queued" : input.kind === "ignore" ? "Ignored" : "Manually resolved";
+        input.kind === "retry"
+          ? "Queued"
+          : input.kind === "ignore"
+            ? "Ignored"
+            : "Manually resolved";
       const { error } = await supabase
         .from("sync_events")
         .update({
@@ -837,7 +843,12 @@ export function useSyncAction(actor: Actor) {
 export function useReleaseAction(actor: Actor) {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: async (input: { release: Release; ring: Ring; rolloutPct: number; reason: string }) => {
+    mutationFn: async (input: {
+      release: Release;
+      ring: Ring;
+      rolloutPct: number;
+      reason: string;
+    }) => {
       const { error } = await supabase
         .from("software_releases")
         .update({
@@ -903,7 +914,10 @@ export function useSaveSettings(actor: Actor) {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: async (patch: Record<string, unknown>) => {
-      const { error } = await supabase.from("platform_settings").update(patch as never).eq("id", 1);
+      const { error } = await supabase
+        .from("platform_settings")
+        .update(patch as never)
+        .eq("id", 1);
       if (error) throw error;
       await writeAudit({
         actor: actor.name,

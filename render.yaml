@@ -4,6 +4,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: npm install && npm run build
+    preDeployCommand: npm run db:migrate
     startCommand: node .output/server/index.mjs
     envVars:
       - key: NODE_VERSION
@@ -12,16 +13,22 @@ services:
         value: "10000"
       - key: NITRO_PRESET
         value: node-server
-      # Set these in the Render dashboard (values from your Lovable Cloud backend):
+      # Temporary authentication bridge; all platform and POS records use Render PostgreSQL.
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_PUBLISHABLE_KEY
         sync: false
-      - key: VITE_SUPABASE_PROJECT_ID
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_PUBLISHABLE_KEY
-        sync: false
-      - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: airavoto-db
+          property: connectionString
+      - key: DATABASE_SSL
+        value: "true"
+      - key: AUTH_SECRET
+        generateValue: true
+
+databases:
+  - name: airavoto-db
+    plan: free
+    databaseName: airavoto
+    user: airavoto

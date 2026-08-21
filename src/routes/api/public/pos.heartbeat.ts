@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { query, withTransaction } from "@/lib/render-db.server";
 import { json, preflight, authInstallation } from "@/lib/pos-ingest";
 
 export const Route = createFileRoute("/api/public/pos/heartbeat")({
@@ -8,7 +9,7 @@ export const Route = createFileRoute("/api/public/pos/heartbeat")({
       POST: async ({ request }) => {
         const auth = await authInstallation(request);
         if (!auth) return json({ error: "Unauthorized" }, 401);
-        const { supabase, installation } = auth;
+        const { installation } = auth;
 
         let body: Record<string, unknown> = {};
         try {
@@ -17,52 +18,80 @@ export const Route = createFileRoute("/api/public/pos/heartbeat")({
           /* heartbeat may be empty */
         }
 
-        const num = (k: string, fallback: number) =>
-          typeof body[k] === "number" ? (body[k] as number) : fallback;
-        const bool = (k: string, fallback: boolean) =>
-          typeof body[k] === "boolean" ? (body[k] as boolean) : fallback;
+        const num = (key: string, fallback: number) =>
+          typeof body[key] === "number" ? (body[key] as number) : fallback;
+        const bool = (key: string, fallback: boolean) =>
+          typeof body[key] === "boolean" ? (body[key] as boolean) : fallback;
 
         const now = new Date().toISOString();
         const syncQueue = num("sync_queue", 0);
         const healthy =
           bool("db_readable", true) && bool("db_writable", true) && bool("local_api_ok", true);
 
-        await supabase
-          .from("installations")
-          .update({
-            last_heartbeat: now,
-            app_version: String(body["app_version"] ?? installation.app_version),
-            service_version: String(body["service_version"] ?? installation.service_version),
-            os: String(body["os"] ?? installation.os),
-            sync_queue: syncQueue,
-            clock_drift_ms: num("clock_drift_ms", 0),
-            disk_free_gb: num("disk_free_gb", installation.disk_free_gb),
-            latency_ms: num("latency_ms", installation.latency_ms),
-            db_readable: bool("db_readable", true),
-            db_writable: bool("db_writable", true),
-            local_api_ok: bool("local_api_ok", true),
-            backup_ok: bool("backup_ok", installation.backup_ok),
-            last_backup: (body["last_backup"] as string | undefined) ?? installation.last_backup,
-            mode: String(body["mode"] ?? installation.mode),
-            migration_state: String(body["migration_state"] ?? installation.migration_state),
-          })
-          .eq("id", installation.id);
-
-        await supabase.from("heartbeats").insert({
-          installation_id: installation.id,
-          cafe_id: installation.cafe_id,
-          at: now,
-          app_version: String(body["app_version"] ?? installation.app_version),
-          sync_queue: syncQueue,
-          healthy,
-          payload: body as never,
+        await withTransaction(async (client) => {
+          await client.query(
+            `UPDATE public.installations
+             SET last_heartbeat = $1,
+                 app_version = COALESCE(NULLIF($2, ''), app_version),
+                 service_version = COALESCE(NULLIF($3, ''), service_version),
+                 os = COALESCE(NULLIF($4, ''), os),
+                 sync_queue = $5,
+                 clock_drift_ms = $6,
+                 disk_free_gb = $7,
+                 latency_ms = $8,
+                 db_readable = $9,
+                 db_writable = $10,
+                 local_api_ok = $11,
+                 backup_ok = $12,
+                 last_backup = COALESCE(NULLIF($13, '')::timestamptz, last_backup),
+                 mode = COALESCE(NULLIF($14, ''), mode),
+                 migration_state = COALESCE(NULLIF($15, ''), migration_state),
+                 updated_at = $1
+             WHERE id = $16`,
+            [
+              now,
+              String(body["app_version"] ?? ""),
+              String(body["service_version"] ?? ""),
+              String(body["os"] ?? ""),
+              syncQueue,
+              num("clock_drift_ms", 0),
+              num("disk_free_gb", installation.disk_free_gb ?? 0),
+              num("latency_ms", installation.latency_ms ?? 0),
+              bool("db_readable", true),
+              bool("db_writable", true),
+              bool("local_api_ok", true),
+              bool("backup_ok", installation.backup_ok ?? false),
+              String(body["last_backup"] ?? ""),
+              String(body["mode"] ?? ""),
+              String(body["migration_state"] ?? ""),
+              installation.id,
+            ],
+          );
+          await client.query(
+            `INSERT INTO public.heartbeats (installation_id, cafe_id, at, app_version, sync_queue, healthy, payload)
+             VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)`,
+            [
+              installation.id,
+              installation.cafe_id,
+              now,
+              String(body["app_version"] ?? installation.app_version ?? "—"),
+              syncQueue,
+              healthy,
+              JSON.stringify(body),
+            ],
+          );
         });
 
-        const { data: license } = await supabase
-          .from("licenses")
-          .select("state, plan, grace_ends, renewal_date")
-          .eq("cafe_id", installation.cafe_id)
-          .maybeSingle();
+        const licenseResult = await query<{
+          state: string;
+          plan: string;
+          grace_ends: string | null;
+          renewal_date: string | null;
+        }>(
+          `SELECT state, plan, grace_ends, renewal_date FROM public.licenses WHERE cafe_id = $1 LIMIT 1`,
+          [installation.cafe_id],
+        );
+        const license = licenseResult.rows[0] ?? null;
 
         return json({
           ok: true,

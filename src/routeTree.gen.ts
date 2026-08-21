@@ -22,6 +22,7 @@ import { Route as CafesCafeIdRouteImport } from './routes/cafes.$cafeId'
 import { Route as CafesNewRouteImport } from './routes/cafes.new'
 import { Route as InstallationsIndexRouteImport } from './routes/installations.index'
 import { Route as InstallationsInstallationIdRouteImport } from './routes/installations.$installationId'
+import { Route as ApiPlatformSnapshotRouteImport } from './routes/api/platform.snapshot'
 import { Route as ApiPublicPosHeartbeatRouteImport } from './routes/api/public/pos.heartbeat'
 import { Route as ApiPublicPosRegisterRouteImport } from './routes/api/public/pos.register'
 
@@ -91,6 +92,11 @@ const InstallationsInstallationIdRoute =
     path: '/installations/$installationId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPlatformSnapshotRoute = ApiPlatformSnapshotRouteImport.update({
+  id: '/api/platform/snapshot',
+  path: '/api/platform/snapshot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicPosHeartbeatRoute = ApiPublicPosHeartbeatRouteImport.update({
   id: '/api/public/pos/heartbeat',
   path: '/api/public/pos/heartbeat',
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/installations/$installationId': typeof InstallationsInstallationIdRoute
   '/cafes/': typeof CafesIndexRoute
   '/installations/': typeof InstallationsIndexRoute
+  '/api/platform/snapshot': typeof ApiPlatformSnapshotRoute
   '/api/public/pos/heartbeat': typeof ApiPublicPosHeartbeatRoute
   '/api/public/pos/register': typeof ApiPublicPosRegisterRoute
 }
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/installations/$installationId': typeof InstallationsInstallationIdRoute
   '/cafes': typeof CafesIndexRoute
   '/installations': typeof InstallationsIndexRoute
+  '/api/platform/snapshot': typeof ApiPlatformSnapshotRoute
   '/api/public/pos/heartbeat': typeof ApiPublicPosHeartbeatRoute
   '/api/public/pos/register': typeof ApiPublicPosRegisterRoute
 }
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/installations/$installationId': typeof InstallationsInstallationIdRoute
   '/cafes/': typeof CafesIndexRoute
   '/installations/': typeof InstallationsIndexRoute
+  '/api/platform/snapshot': typeof ApiPlatformSnapshotRoute
   '/api/public/pos/heartbeat': typeof ApiPublicPosHeartbeatRoute
   '/api/public/pos/register': typeof ApiPublicPosRegisterRoute
 }
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/installations/$installationId'
     | '/cafes/'
     | '/installations/'
+    | '/api/platform/snapshot'
     | '/api/public/pos/heartbeat'
     | '/api/public/pos/register'
   fileRoutesByTo: FileRoutesByTo
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/installations/$installationId'
     | '/cafes'
     | '/installations'
+    | '/api/platform/snapshot'
     | '/api/public/pos/heartbeat'
     | '/api/public/pos/register'
   id:
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '/installations/$installationId'
     | '/cafes/'
     | '/installations/'
+    | '/api/platform/snapshot'
     | '/api/public/pos/heartbeat'
     | '/api/public/pos/register'
   fileRoutesById: FileRoutesById
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   InstallationsInstallationIdRoute: typeof InstallationsInstallationIdRoute
   CafesIndexRoute: typeof CafesIndexRoute
   InstallationsIndexRoute: typeof InstallationsIndexRoute
+  ApiPlatformSnapshotRoute: typeof ApiPlatformSnapshotRoute
   ApiPublicPosHeartbeatRoute: typeof ApiPublicPosHeartbeatRoute
   ApiPublicPosRegisterRoute: typeof ApiPublicPosRegisterRoute
 }
@@ -319,6 +332,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InstallationsInstallationIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/platform/snapshot': {
+      id: '/api/platform/snapshot'
+      path: '/api/platform/snapshot'
+      fullPath: '/api/platform/snapshot'
+      preLoaderRoute: typeof ApiPlatformSnapshotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/pos/heartbeat': {
       id: '/api/public/pos/heartbeat'
       path: '/api/public/pos/heartbeat'
@@ -350,6 +370,7 @@ const rootRouteChildren: RootRouteChildren = {
   InstallationsInstallationIdRoute: InstallationsInstallationIdRoute,
   CafesIndexRoute: CafesIndexRoute,
   InstallationsIndexRoute: InstallationsIndexRoute,
+  ApiPlatformSnapshotRoute: ApiPlatformSnapshotRoute,
   ApiPublicPosHeartbeatRoute: ApiPublicPosHeartbeatRoute,
   ApiPublicPosRegisterRoute: ApiPublicPosRegisterRoute,
 }
